@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Survival Arena</title>
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(circle at center, #0a0f2c, #000);
+    overflow: hidden;
+    font-family: "Segoe UI", sans-serif;
+}
+#ui {
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    color: #00ffff;
+    font-size: 18px;
+    text-shadow: 0 0 10px #00ffff;
+}
+#ammoDisplay {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    color: #fff;
+    font-size: 48px;
+    font-weight: bold;
+    text-shadow: 0 0 15px #00ffff, 2px 2px 4px #000;
+}
+#ammoDisplay.low {
+    color: #ff3333;
+    text-shadow: 0 0 20px #ff0000, 2px 2px 4px #000;
+}
+#upgradeMenu {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 15, 44, 0.95);
+    border: 3px solid #00ffff;
+    padding: 30px;
+    color: #fff;
+    font-size: 20px;
+    text-align: center;
+    box-shadow: 0 0 30px #00ffff;
+    display: none;
+}
+#upgradeMenu button {
+    background: #00ffff;
+    border: none;
+    padding: 15px 30px;
+    margin: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #000;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+#upgradeMenu button:hover {
+    background: #00cccc;
+    transform: scale(1.05);
+}
+#upgradeMenu button:disabled {
+    background: #555;
+    cursor: not-allowed;
+    transform: scale(1);
+}
+canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="ui">
+Score: <span id="score">0</span><br>
+Coins: <span id="coins">0</span><br>
+Wave: <span id="wave">1</span><br>
+Kills: <span id="kills">0</span><br>
+[B] Build Turret (25) | [R] Reload | [U] Upgrades
+</div>
+
+<div id="ammoDisplay">
+<span id="ammo">30</span>/30
+</div>
+
+<div id="upgradeMenu">
+    <h2 style="color: #00ffff; margin-top: 0;">UPGRADE SHOP</h2>
+    <div style="margin: 20px 0;">
+        <button id="upgradeDamage">Increase Damage (50 coins)<br><small>Current: <span id="dmgLevel">1</span></small></button><br>
+        <button id="upgradeSpeed">Increase Speed (40 coins)<br><small>Current: <span id="spdLevel">5</span></small></button><br>
+        <button id="upgradeAmmo">Max Ammo +10 (60 coins)<br><small>Current: <span id="ammoLevel">30</span></small></button><br>
+        <button id="upgradeFireRate">Fire Rate (70 coins)<br><small>Current: <span id="fireLevel">150ms</span></small></button><br>
+        <button id="upgradeMultiShot">Multi-Shot (80 coins)<br><small>Bullets: <span id="multiLevel">1</span></small></button>
+    </div>
+    <button id="closeUpgrade" style="background: #ff3333;">Close [U]</button>
+</div>
+
+<canvas></canvas>
+
+<script>
+const canvas = document.querySelector("canvas");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+addEventListener("resize", () => {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+});
+
+const mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+addEventListener("mousemove", e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+
+let score = 0, coins = 0;
+let lastShot = 0;
+let fireRate = 150;
+let gameOver = false;
+let ammo = 30;
+let maxAmmo = 30;
+let reloading = false;
+let wave = 1;
+let spawnInterval = 900;
+let spawnTimer = null;
+let kills = 0;
+let playerDamage = 1;
+let upgradeMenuOpen = false;
+let multiShot = 1;
+
+const scoreEl = document.getElementById("score");
+const coinsEl = document.getElementById("coins");
+const ammoEl = document.getElementById("ammo");
+const waveEl = document.getElementById("wave");
+const killsEl = document.getElementById("kills");
+const upgradeMenu = document.getElementById("upgradeMenu");
+const ammoDisplay = document.getElementById("ammoDisplay");
+
+class Player {
+    constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.r = 16;
+        this.speed = 5;
+    }
+    update() {
+        this.x = Math.max(this.r, Math.min(canvas.width - this.r, this.x));
+        this.y = Math.max(this.r, Math.min(canvas.height - this.r, this.y));
+
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = "#00ffff";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#00ffff";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+class Bullet {
+    constructor(x, y, a, dmg = 1) {
+        this.x = x;
+        this.y = y;
+        this.vx = Math.cos(a) * 10;
+        this.vy = Math.sin(a) * 10;
+        this.r = 4;
+        this.dmg = dmg;
+    }
+    update() {
+        if (!upgradeMenuOpen) {
+            this.x += this.vx;
+            this.y += this.vy;
+        }
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+    }
+}
+
+class Enemy {
+    constructor(big = false) {
+        this.big = big;
+        this.x = Math.random() * canvas.width;
+        this.y = -40;
+        this.r = big ? 28 : 15;
+        this.hp = big ? 5 : 1;
+        this.speed = big ? 1.1 : 1.8;
+    }
+    update() {
+        const a = Math.atan2(player.y - this.y, player.x - this.x);
+        if (!upgradeMenuOpen) {
+            this.x += Math.cos(a) * this.speed;
+            this.y += Math.sin(a) * this.speed;
+        }
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = this.big ? "#5a189a" : "#b00020";
+        ctx.fill();
+
+        // Draw health bar for big enemies
+        if (this.big) {
+            const barWidth = this.r * 2;
+            const barHeight = 4;
+            const healthPercent = this.hp / 5;
+            
+            ctx.fillStyle = "#333";
+            ctx.fillRect(this.x - this.r, this.y - this.r - 8, barWidth, barHeight);
+            ctx.fillStyle = "#0f0";
+            ctx.fillRect(this.x - this.r, this.y - this.r - 8, barWidth * healthPercent, barHeight);
+        }
+    }
+}
+
+class Coin {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.r = 10;
+    }
+    update() {
+        if (Math.hypot(this.x - player.x, this.y - player.y) < 50) {
+            coins++;
+            coinsEl.textContent = coins;
+            return true;
+        }
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "gold";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = "gold";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        return false;
+    }
+}
+
+class Turret {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.cooldown = 0;
+        this.durability = 50;
+        this.maxDurability = 50;
+    }
+    update() {
+        // Draw turret body
+        ctx.fillStyle = "#888";
+        ctx.fillRect(this.x - 10, this.y - 10, 20, 20);
+
+        // Draw durability bar
+        const barWidth = 20;
+        const barHeight = 3;
+        const healthPercent = this.durability / this.maxDurability;
+        ctx.fillStyle = "#333";
+        ctx.fillRect(this.x - 10, this.y + 12, barWidth, barHeight);
+        ctx.fillStyle = "#0f0";
+        ctx.fillRect(this.x - 10, this.y + 12, barWidth * healthPercent, barHeight);
+
+        if (upgradeMenuOpen) return;
+        if (this.cooldown-- > 0) return;
+
+        let closest = null, dist = Infinity;
+        enemies.forEach(e => {
+            const d = Math.hypot(e.x - this.x, e.y - this.y);
+            if (d < dist) { dist = d; closest = e; }
+        });
+
+        if (closest && dist < 400) {
+            const a = Math.atan2(closest.y - this.y, closest.x - this.x);
+            bullets.push(new Bullet(this.x, this.y, a));
+            this.cooldown = 40;
+            this.durability--;
+        }
+    }
+}
+
+const player = new Player();
+const bullets = [];
+const enemies = [];
+const coinsArr = [];
+const turrets = [];
+const keys = {};
+
+addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+    
+    // Revive system
+    if (gameOver && e.key.toLowerCase() === "r" && coins >= 50) {
+        coins -= 50;
+        coinsEl.textContent = coins;
+        gameOver = false;
+        
+        // Clear nearby enemies to give player a chance
+        enemies.forEach((enemy, index) => {
+            const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+            if (dist < 200) {
+                enemies.splice(index, 1);
+            }
+        });
+        
+        // Restore some ammo
+        ammo = Math.min(maxAmmo, ammo + 15);
+        ammoEl.textContent = ammo;
+        ammoDisplay.classList.remove('low');
+        return;
+    }
+    
+    if (e.code === "Space" && !upgradeMenuOpen) shoot();
+    if (e.key.toLowerCase() === "r" && !upgradeMenuOpen && !gameOver) reload();
+    if (e.key.toLowerCase() === "u") toggleUpgradeMenu();
+    if (e.key.toLowerCase() === "b" && coins >= 25 && !upgradeMenuOpen) {
+        coins -= 25;
+        coinsEl.textContent = coins;
+        turrets.push(new Turret(player.x, player.y));
+    }
+});
+addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+addEventListener("mousedown", shoot);
+
+function shoot() {
+    if (reloading || ammo <= 0) return;
+    const now = Date.now();
+    if (now - lastShot < fireRate) return;
+    lastShot = now;
+    
+    const baseAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    
+    // Shoot multiple bullets based on upgrade
+    if (multiShot === 1) {
+        bullets.push(new Bullet(player.x, player.y, baseAngle, playerDamage));
+    } else if (multiShot === 2) {
+        // Double shot - slight spread
+        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.1, playerDamage));
+        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.1, playerDamage));
+    } else if (multiShot === 3) {
+        // Triple shot - spread pattern
+        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.15, playerDamage));
+        bullets.push(new Bullet(player.x, player.y, baseAngle, playerDamage));
+        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.15, playerDamage));
+    } else {
+        // Quad shot - wider spread
+        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.2, playerDamage));
+        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.07, playerDamage));
+        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.07, playerDamage));
+        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.2, playerDamage));
+    }
+    
+    ammo--;
+    ammoEl.textContent = ammo;
+    
+    if (ammo <= 5) {
+        ammoDisplay.classList.add('low');
+    } else {
+        ammoDisplay.classList.remove('low');
+    }
+}
+
+function reload() {
+    if (reloading || ammo === maxAmmo) return;
+    reloading = true;
+    setTimeout(() => {
+        ammo = maxAmmo;
+        ammoEl.textContent = ammo;
+        ammoDisplay.classList.remove('low');
+        reloading = false;
+    }, 1500);
+}
+
+function toggleUpgradeMenu() {
+    upgradeMenuOpen = !upgradeMenuOpen;
+    upgradeMenu.style.display = upgradeMenuOpen ? 'block' : 'none';
+}
+
+document.getElementById('upgradeDamage').addEventListener('click', () => {
+    if (coins >= 50) {
+        coins -= 50;
+        playerDamage++;
+        coinsEl.textContent = coins;
+        document.getElementById('dmgLevel').textContent = playerDamage;
+    }
+});
+
+document.getElementById('upgradeSpeed').addEventListener('click', () => {
+    if (coins >= 40) {
+        coins -= 40;
+        player.speed += 0.5;
+        coinsEl.textContent = coins;
+        document.getElementById('spdLevel').textContent = player.speed.toFixed(1);
+    }
+});
+
+document.getElementById('upgradeAmmo').addEventListener('click', () => {
+    if (coins >= 60) {
+        coins -= 60;
+        maxAmmo += 10;
+        ammo = maxAmmo;
+        coinsEl.textContent = coins;
+        ammoEl.textContent = ammo;
+        document.getElementById('ammoLevel').textContent = maxAmmo;
+    }
+});
+
+document.getElementById('upgradeFireRate').addEventListener('click', () => {
+    if (coins >= 70 && fireRate > 50) {
+        coins -= 70;
+        fireRate -= 20;
+        coinsEl.textContent = coins;
+        document.getElementById('fireLevel').textContent = fireRate + 'ms';
+    }
+});
+
+document.getElementById('upgradeMultiShot').addEventListener('click', () => {
+    if (coins >= 80 && multiShot < 4) {
+        coins -= 80;
+        multiShot++;
+        coinsEl.textContent = coins;
+        document.getElementById('multiLevel').textContent = multiShot;
+    }
+});
+
+document.getElementById('closeUpgrade').addEventListener('click', toggleUpgradeMenu);
+
+function startWave() {
+    if (spawnTimer) clearInterval(spawnTimer);
+    
+    spawnInterval = Math.max(300, 900 - (wave * 50));
+    const bigChance = Math.min(0.5, 0.15 + (wave * 0.03));
+    
+    spawnTimer = setInterval(() => {
+        enemies.push(new Enemy(Math.random() < bigChance));
+    }, spawnInterval);
+}
+
+function nextWave() {
+    wave++;
+    waveEl.textContent = wave;
+    startWave();
+}
+
+// Start first wave
+startWave();
+
+// Increase wave every 45 seconds
+setInterval(nextWave, 45000);
+
+function move() {
+    if (upgradeMenuOpen) return;
+    if (keys.w) player.y -= player.speed;
+    if (keys.s) player.y += player.speed;
+    if (keys.a) player.x -= player.speed;
+    if (keys.d) player.x += player.speed;
+}
+
+function animate() {
+    if (gameOver) {
+        ctx.fillStyle = "#fff";
+        ctx.font = "48px Segoe UI";
+        ctx.fillText("GAME OVER", canvas.width / 2 - 140, canvas.height / 2);
+        ctx.font = "24px Segoe UI";
+        ctx.fillText(`Final Score: ${score} | Wave: ${wave} | Kills: ${kills}`, canvas.width / 2 - 200, canvas.height / 2 + 40);
+        
+        if (coins >= 50) {
+            ctx.fillStyle = "#00ff00";
+            ctx.font = "28px Segoe UI";
+            ctx.fillText("Press [R] to Revive (50 coins)", canvas.width / 2 - 180, canvas.height / 2 + 80);
+        } else {
+            ctx.fillStyle = "#ff3333";
+            ctx.font = "20px Segoe UI";
+            ctx.fillText("Not enough coins to revive (need 50)", canvas.width / 2 - 150, canvas.height / 2 + 80);
+        }
+        return;
+    }
+
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    move();
+    player.update();
+
+    turrets.forEach((t, ti) => {
+        t.update();
+        if (t.durability <= 0 && !upgradeMenuOpen) {
+            turrets.splice(ti, 1);
+        }
+    });
+
+    bullets.forEach((b, bi) => {
+        b.update();
+        if (!upgradeMenuOpen && (b.x < 0 || b.y < 0 || b.x > canvas.width || b.y > canvas.height))
+            bullets.splice(bi, 1);
+    });
+
+    enemies.forEach((e, ei) => {
+        e.update();
+        if (!upgradeMenuOpen && Math.hypot(e.x - player.x, e.y - player.y) < e.r + player.r)
+            gameOver = true;
+
+        if (!upgradeMenuOpen) {
+            bullets.forEach((b, bi) => {
+                if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
+                    bullets.splice(bi, 1);
+                    e.hp -= b.dmg;
+                    if (e.hp <= 0) {
+                        enemies.splice(ei, 1);
+                        kills++;
+                        score += e.big ? 30 : 10;
+                        scoreEl.textContent = score;
+                        killsEl.textContent = kills;
+                        
+                        // Drop more coins for big enemies
+                        if (e.big) {
+                            for (let i = 0; i < 3; i++) {
+                                coinsArr.push(new Coin(e.x + (Math.random() - 0.5) * 30, e.y + (Math.random() - 0.5) * 30));
+                            }
+                        } else {
+                            coinsArr.push(new Coin(e.x, e.y));
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    coinsArr.forEach((c, ci) => {
+        if (c.update()) coinsArr.splice(ci, 1);
+    });
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>
