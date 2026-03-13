@@ -120,12 +120,8 @@
     }
 
     @keyframes pulse {
-      from {
-        transform: translate(-50%, -50%) scale(1);
-      }
-      to {
-        transform: translate(-50%, -50%) scale(1.05);
-      }
+      from { transform: translate(-50%, -50%) scale(1); }
+      to   { transform: translate(-50%, -50%) scale(1.05); }
     }
 
     #bossHealthBar {
@@ -160,9 +156,7 @@
       z-index: 50;
     }
 
-    canvas {
-      display: block;
-    }
+    canvas { display: block; }
   </style>
 </head>
 <body>
@@ -219,7 +213,6 @@
   <canvas></canvas>
 
   <script>
-    // Canvas setup
     const canvas = document.querySelector("canvas");
     const ctx = canvas.getContext("2d");
     canvas.width = innerWidth;
@@ -230,60 +223,33 @@
       canvas.height = innerHeight;
     });
 
-    // Mouse tracking
     const mouse = { x: canvas.width / 2, y: canvas.height / 2 };
-    addEventListener("mousemove", e => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    });
+    addEventListener("mousemove", e => { mouse.x = e.clientX; mouse.y = e.clientY; });
 
-    // Game state variables
-    let score = 0;
-    let coins = 0;
-    let lastShot = 0;
-    let fireRate = 150;
-    let gameOver = false;
-    let ammo = 30;
-    let maxAmmo = 30;
-    let reloading = false;
-    let wave = 1;
-    let spawnInterval = 900;
-    let spawnTimer = null;
-    let kills = 0;
-    let playerDamage = 1;
-    let upgradeMenuOpen = false;
-    let multiShot = 1;
-    let highScores = [];
-    let bossActive = false;
-    let bossWave = false;
-    let currentBoss = null;
-    let waveTimer = null;
+    let score = 0, coins = 0, lastShot = 0, fireRate = 150;
+    let gameOver = false, ammo = 30, maxAmmo = 30, reloading = false;
+    let wave = 1, spawnInterval = 900, spawnTimer = null, kills = 0;
+    let playerDamage = 1, upgradeMenuOpen = false, multiShot = 1;
+    let highScores = [], bossActive = false, bossWave = false;
+    let currentBoss = null, waveTimer = null;
 
-    // DOM elements
-    const scoreEl = document.getElementById("score");
-    const coinsEl = document.getElementById("coins");
-    const ammoEl = document.getElementById("ammo");
-    const waveEl = document.getElementById("wave");
-    const killsEl = document.getElementById("kills");
-    const upgradeMenu = document.getElementById("upgradeMenu");
-    const ammoDisplay = document.getElementById("ammoDisplay");
-    const scoreListEl = document.getElementById("scoreList");
-    const bossWarning = document.getElementById("bossWarning");
-    const bossHealthBar = document.getElementById("bossHealthBar");
+    const scoreEl    = document.getElementById("score");
+    const coinsEl    = document.getElementById("coins");
+    const ammoEl     = document.getElementById("ammo");
+    const waveEl     = document.getElementById("wave");
+    const killsEl    = document.getElementById("kills");
+    const upgradeMenu    = document.getElementById("upgradeMenu");
+    const ammoDisplay    = document.getElementById("ammoDisplay");
+    const scoreListEl    = document.getElementById("scoreList");
+    const bossWarning    = document.getElementById("bossWarning");
+    const bossHealthBar  = document.getElementById("bossHealthBar");
     const bossHealthFill = document.getElementById("bossHealthFill");
-    const bossLabel = document.getElementById("bossLabel");
+    const bossLabel      = document.getElementById("bossLabel");
 
-    // Scoreboard functions
     function updateScoreboard() {
-      scoreListEl.innerHTML = highScores
-        .slice(0, 5)
-        .map((entry, index) => 
-          `<div class="score-entry">
-            <span>#${index + 1}</span>
-            <span>${entry.score} pts (W${entry.wave})</span>
-          </div>`
-        )
-        .join('');
+      scoreListEl.innerHTML = highScores.slice(0, 5).map((e, i) =>
+        `<div class="score-entry"><span>#${i+1}</span><span>${e.score} pts (W${e.wave})</span></div>`
+      ).join('');
     }
 
     function saveHighScore() {
@@ -295,7 +261,6 @@
 
     updateScoreboard();
 
-    // Player class
     class Player {
       constructor() {
         this.x = canvas.width / 2;
@@ -303,11 +268,9 @@
         this.r = 16;
         this.speed = 5;
       }
-
       update() {
-        this.x = Math.max(this.r, Math.min(canvas.width - this.r, this.x));
+        this.x = Math.max(this.r, Math.min(canvas.width  - this.r, this.x));
         this.y = Math.max(this.r, Math.min(canvas.height - this.r, this.y));
-
         ctx.shadowBlur = 25;
         ctx.shadowColor = "#00ffff";
         ctx.beginPath();
@@ -318,104 +281,88 @@
       }
     }
 
-    // Bullet class
     class Bullet {
       constructor(x, y, a, dmg = 1, fromBoss = false) {
-        this.x = x;
-        this.y = y;
+        this.x = x; this.y = y;
         this.vx = Math.cos(a) * 10;
         this.vy = Math.sin(a) * 10;
         this.r = 4;
         this.dmg = dmg;
         this.fromBoss = fromBoss;
+        this.dead = false;
       }
-
       update() {
-        if (!upgradeMenuOpen) {
-          this.x += this.vx;
-          this.y += this.vy;
-        }
-
+        if (!upgradeMenuOpen) { this.x += this.vx; this.y += this.vy; }
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
         ctx.fillStyle = this.fromBoss ? "#ff0000" : "white";
         ctx.fill();
       }
+      isOffscreen() {
+        return this.x < 0 || this.y < 0 || this.x > canvas.width || this.y > canvas.height;
+      }
     }
 
-    // Enemy class
     class Enemy {
       constructor(big = false) {
-        this.big = big;
-        this.x = Math.random() * canvas.width;
-        this.y = -40;
-        this.r = big ? 28 : 15;
-        this.hp = big ? 5 : 1;
+        this.big   = big;
+        this.x     = Math.random() * canvas.width;
+        this.y     = -40;
+        this.r     = big ? 28 : 15;
+        this.hp    = big ? 5 : 1;
         this.speed = big ? 1.1 : 1.8;
+        this.dead  = false;
       }
-
       update() {
         const a = Math.atan2(player.y - this.y, player.x - this.x);
-
         if (!upgradeMenuOpen) {
           this.x += Math.cos(a) * this.speed;
           this.y += Math.sin(a) * this.speed;
         }
-
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
         ctx.fillStyle = this.big ? "#5a189a" : "#b00020";
         ctx.fill();
-
         if (this.big) {
-          const barWidth = this.r * 2;
-          const barHeight = 4;
-          const healthPercent = this.hp / 5;
-
+          const bw = this.r * 2, bh = 4, hp = this.hp / 5;
           ctx.fillStyle = "#333";
-          ctx.fillRect(this.x - this.r, this.y - this.r - 8, barWidth, barHeight);
+          ctx.fillRect(this.x - this.r, this.y - this.r - 8, bw, bh);
           ctx.fillStyle = "#0f0";
-          ctx.fillRect(this.x - this.r, this.y - this.r - 8, barWidth * healthPercent, barHeight);
+          ctx.fillRect(this.x - this.r, this.y - this.r - 8, bw * hp, bh);
         }
       }
     }
 
-    // Boss class
     class Boss {
       constructor(waveNum) {
-        this.x = canvas.width / 2;
-        this.y = -80;
-        this.targetY = canvas.height * 0.25;
-        this.bossNumber = Math.floor(waveNum / 5);
-        this.r = Math.min(60, 45 + this.bossNumber * 3);
-        this.maxHp = 50 + this.bossNumber * 30;
-        this.hp = this.maxHp;
-        this.speed = 2;
+        this.x           = canvas.width / 2;
+        this.y           = -80;
+        this.targetY     = canvas.height * 0.25;
+        this.bossNumber  = Math.floor(waveNum / 5);
+        this.r           = Math.min(60, 45 + this.bossNumber * 3);
+        this.maxHp       = 50 + this.bossNumber * 30;
+        this.hp          = this.maxHp;
+        this.speed       = 2;
         this.shootCooldown = 0;
-        this.shootRate = Math.max(30, 80 - this.bossNumber * 8);
+        this.shootRate   = Math.max(30, 80 - this.bossNumber * 8);
         this.bulletCount = Math.min(8, 2 + Math.floor(this.bossNumber / 2));
-        this.moveTimer = 0;
+        this.moveTimer   = 0;
         this.moveDirection = 1;
-        this.entering = true;
+        this.entering    = true;
+        this.dead        = false;
       }
-
       update() {
         if (this.entering) {
-          if (this.y < this.targetY) {
-            this.y += 3;
-          } else {
-            this.entering = false;
+          if (this.y < this.targetY) { this.y += 3; }
+          else { this.entering = false; }
+        } else if (!upgradeMenuOpen) {
+          this.moveTimer++;
+          if (this.moveTimer > 60) {
+            this.moveDirection = Math.random() > 0.5 ? 1 : -1;
+            this.moveTimer = 0;
           }
-        } else {
-          if (!upgradeMenuOpen) {
-            this.moveTimer++;
-            if (this.moveTimer > 60) {
-              this.moveDirection = Math.random() > 0.5 ? 1 : -1;
-              this.moveTimer = 0;
-            }
-            this.x += this.speed * this.moveDirection;
-            this.x = Math.max(this.r + 20, Math.min(canvas.width - this.r - 20, this.x));
-          }
+          this.x += this.speed * this.moveDirection;
+          this.x = Math.max(this.r + 20, Math.min(canvas.width - this.r - 20, this.x));
         }
 
         ctx.shadowBlur = 30;
@@ -424,7 +371,6 @@
         ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
         ctx.fillStyle = "#8b0000";
         ctx.fill();
-
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r * 0.6, 0, Math.PI * 2);
         ctx.fillStyle = "#ff0000";
@@ -441,31 +387,23 @@
           }
         }
       }
-
       shoot() {
-        const angleStep = (Math.PI * 2) / this.bulletCount;
+        const step = (Math.PI * 2) / this.bulletCount;
         for (let i = 0; i < this.bulletCount; i++) {
-          const angle = angleStep * i + (Date.now() / 1000);
-          bullets.push(new Bullet(this.x, this.y, angle, 1, true));
+          bullets.push(new Bullet(this.x, this.y, step * i + Date.now() / 1000, 1, true));
         }
       }
     }
 
-    // Coin class
     class Coin {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.r = 10;
-      }
-
+      constructor(x, y) { this.x = x; this.y = y; this.r = 10; this.dead = false; }
       update() {
         if (Math.hypot(this.x - player.x, this.y - player.y) < 50) {
           coins++;
           coinsEl.textContent = coins;
-          return true;
+          this.dead = true;
+          return;
         }
-
         ctx.shadowBlur = 15;
         ctx.shadowColor = "gold";
         ctx.beginPath();
@@ -473,257 +411,148 @@
         ctx.fillStyle = "gold";
         ctx.fill();
         ctx.shadowBlur = 0;
-        return false;
       }
     }
 
-    // Turret class
     class Turret {
       constructor(x, y) {
-        this.x = x;
-        this.y = y;
+        this.x = x; this.y = y;
         this.cooldown = 0;
         this.durability = 50;
         this.maxDurability = 50;
+        this.dead = false;
       }
-
       update() {
         ctx.fillStyle = "#888";
         ctx.fillRect(this.x - 10, this.y - 10, 20, 20);
-
-        const barWidth = 20;
-        const barHeight = 3;
-        const healthPercent = this.durability / this.maxDurability;
-
+        const hp = this.durability / this.maxDurability;
         ctx.fillStyle = "#333";
-        ctx.fillRect(this.x - 10, this.y + 12, barWidth, barHeight);
+        ctx.fillRect(this.x - 10, this.y + 12, 20, 3);
         ctx.fillStyle = "#0f0";
-        ctx.fillRect(this.x - 10, this.y + 12, barWidth * healthPercent, barHeight);
+        ctx.fillRect(this.x - 10, this.y + 12, 20 * hp, 3);
 
-        if (upgradeMenuOpen) return;
-        if (this.cooldown-- > 0) return;
+        if (upgradeMenuOpen || this.cooldown-- > 0) return;
 
-        let closest = null;
-        let dist = Infinity;
-
-        if (currentBoss) {
+        let closest = null, dist = Infinity;
+        if (currentBoss && bossActive) {
           const d = Math.hypot(currentBoss.x - this.x, currentBoss.y - this.y);
-          if (d < 400) {
-            closest = currentBoss;
-            dist = d;
+          if (d < 400) { closest = currentBoss; dist = d; }
+        }
+        if (!closest) {
+          for (const e of enemies) {
+            const d = Math.hypot(e.x - this.x, e.y - this.y);
+            if (d < dist) { dist = d; closest = e; }
           }
         }
-
-        if (!closest) {
-          enemies.forEach(e => {
-            const d = Math.hypot(e.x - this.x, e.y - this.y);
-            if (d < dist) {
-              dist = d;
-              closest = e;
-            }
-          });
-        }
-
         if (closest && dist < 400) {
           const a = Math.atan2(closest.y - this.y, closest.x - this.x);
           bullets.push(new Bullet(this.x, this.y, a));
           this.cooldown = 40;
           this.durability--;
+          if (this.durability <= 0) this.dead = true;
         }
       }
     }
 
-    // Game objects
-    const player = new Player();
-    const bullets = [];
-    const enemies = [];
+    const player   = new Player();
+    const bullets  = [];
+    const enemies  = [];
     const coinsArr = [];
-    const turrets = [];
-    const keys = {};
+    const turrets  = [];
+    const keys     = {};
 
-    // Keyboard input
     addEventListener("keydown", e => {
-      if (gameOver && e.code === "Space") {
-        e.preventDefault();
-        restartGame();
-        return;
-      }
-
+      if (gameOver && e.code === "Space") { e.preventDefault(); restartGame(); return; }
       keys[e.key.toLowerCase()] = true;
 
       if (gameOver && e.key.toLowerCase() === "r" && coins >= 50) {
         e.preventDefault();
-        coins -= 50;
-        coinsEl.textContent = coins;
+        coins -= 50; coinsEl.textContent = coins;
         gameOver = false;
-
         for (let i = enemies.length - 1; i >= 0; i--) {
-          const dist = Math.hypot(enemies[i].x - player.x, enemies[i].y - player.y);
-          if (dist < 200) enemies.splice(i, 1);
+          if (Math.hypot(enemies[i].x - player.x, enemies[i].y - player.y) < 200)
+            enemies.splice(i, 1);
         }
-
         ammo = Math.min(maxAmmo, ammo + 15);
         ammoEl.textContent = ammo;
         ammoDisplay.classList.remove('low');
         return;
       }
-
       if (gameOver) return;
-
       if (e.key.toLowerCase() === "r" && !upgradeMenuOpen) reload();
       if (e.key.toLowerCase() === "u") toggleUpgradeMenu();
-
       if (e.key.toLowerCase() === "b" && coins >= 25 && !upgradeMenuOpen) {
-        coins -= 25;
-        coinsEl.textContent = coins;
+        coins -= 25; coinsEl.textContent = coins;
         turrets.push(new Turret(player.x, player.y));
       }
     });
-
-    addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+    addEventListener("keyup",    e => keys[e.key.toLowerCase()] = false);
     addEventListener("mousedown", shoot);
 
-    // Shooting function
     function shoot() {
       if (reloading || ammo <= 0 || gameOver) return;
-
       const now = Date.now();
       if (now - lastShot < fireRate) return;
-
       lastShot = now;
-      const baseAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-
-      if (multiShot === 1) {
-        bullets.push(new Bullet(player.x, player.y, baseAngle, playerDamage));
-      } else if (multiShot === 2) {
-        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.1, playerDamage));
-        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.1, playerDamage));
-      } else if (multiShot === 3) {
-        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.15, playerDamage));
-        bullets.push(new Bullet(player.x, player.y, baseAngle, playerDamage));
-        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.15, playerDamage));
-      } else {
-        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.2, playerDamage));
-        bullets.push(new Bullet(player.x, player.y, baseAngle - 0.07, playerDamage));
-        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.07, playerDamage));
-        bullets.push(new Bullet(player.x, player.y, baseAngle + 0.2, playerDamage));
-      }
-
+      const ba = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+      if      (multiShot === 1) { bullets.push(new Bullet(player.x, player.y, ba, playerDamage)); }
+      else if (multiShot === 2) { bullets.push(new Bullet(player.x, player.y, ba-0.1, playerDamage)); bullets.push(new Bullet(player.x, player.y, ba+0.1, playerDamage)); }
+      else if (multiShot === 3) { [-0.15, 0, 0.15].forEach(o => bullets.push(new Bullet(player.x, player.y, ba+o, playerDamage))); }
+      else                      { [-0.2,-0.07,0.07,0.2].forEach(o => bullets.push(new Bullet(player.x, player.y, ba+o, playerDamage))); }
       ammo--;
       ammoEl.textContent = ammo;
-
-      if (ammo <= 5) {
-        ammoDisplay.classList.add('low');
-      } else {
-        ammoDisplay.classList.remove('low');
-      }
+      ammoDisplay.classList.toggle('low', ammo <= 5);
     }
 
-    // Reload function
     function reload() {
       if (reloading || ammo === maxAmmo) return;
-
       reloading = true;
       setTimeout(() => {
-        ammo = maxAmmo;
-        ammoEl.textContent = ammo;
+        ammo = maxAmmo; ammoEl.textContent = ammo;
         ammoDisplay.classList.remove('low');
         reloading = false;
       }, 1500);
     }
 
-    // Toggle upgrade menu
     function toggleUpgradeMenu() {
       upgradeMenuOpen = !upgradeMenuOpen;
       upgradeMenu.style.display = upgradeMenuOpen ? 'block' : 'none';
     }
 
-    // Upgrade button event listeners
     document.getElementById('upgradeDamage').addEventListener('click', () => {
-      if (coins >= 50) {
-        coins -= 50;
-        playerDamage++;
-        coinsEl.textContent = coins;
-        document.getElementById('dmgLevel').textContent = playerDamage;
-      }
+      if (coins >= 50) { coins -= 50; playerDamage++; coinsEl.textContent = coins; document.getElementById('dmgLevel').textContent = playerDamage; }
     });
-
     document.getElementById('upgradeSpeed').addEventListener('click', () => {
-      if (coins >= 40) {
-        coins -= 40;
-        player.speed += 0.5;
-        coinsEl.textContent = coins;
-        document.getElementById('spdLevel').textContent = player.speed.toFixed(1);
-      }
+      if (coins >= 40) { coins -= 40; player.speed += 0.5; coinsEl.textContent = coins; document.getElementById('spdLevel').textContent = player.speed.toFixed(1); }
     });
-
     document.getElementById('upgradeAmmo').addEventListener('click', () => {
-      if (coins >= 60) {
-        coins -= 60;
-        maxAmmo += 10;
-        ammo = maxAmmo;
-        coinsEl.textContent = coins;
-        ammoEl.textContent = ammo;
-        document.getElementById('ammoLevel').textContent = maxAmmo;
-      }
+      if (coins >= 60) { coins -= 60; maxAmmo += 10; ammo = maxAmmo; coinsEl.textContent = coins; ammoEl.textContent = ammo; document.getElementById('ammoLevel').textContent = maxAmmo; }
     });
-
     document.getElementById('upgradeFireRate').addEventListener('click', () => {
-      if (coins >= 70 && fireRate > 50) {
-        coins -= 70;
-        fireRate -= 20;
-        coinsEl.textContent = coins;
-        document.getElementById('fireLevel').textContent = fireRate + 'ms';
-      }
+      if (coins >= 70 && fireRate > 50) { coins -= 70; fireRate -= 20; coinsEl.textContent = coins; document.getElementById('fireLevel').textContent = fireRate + 'ms'; }
     });
-
     document.getElementById('upgradeMultiShot').addEventListener('click', () => {
-      if (coins >= 80 && multiShot < 4) {
-        coins -= 80;
-        multiShot++;
-        coinsEl.textContent = coins;
-        document.getElementById('multiLevel').textContent = multiShot;
-      }
+      if (coins >= 80 && multiShot < 4) { coins -= 80; multiShot++; coinsEl.textContent = coins; document.getElementById('multiLevel').textContent = multiShot; }
     });
-
     document.getElementById('closeUpgrade').addEventListener('click', toggleUpgradeMenu);
 
-    // Restart game function
     function restartGame() {
-      score = 0;
-      coins = 0;
-      wave = 1;
-      kills = 0;
-      ammo = 30;
-      maxAmmo = 30;
-      fireRate = 150;
-      playerDamage = 1;
-      multiShot = 1;
-      gameOver = false;
-      reloading = false;
-      upgradeMenuOpen = false;
-      bossActive = false;
-      bossWave = false;
-      currentBoss = null;
+      score = 0; coins = 0; wave = 1; kills = 0;
+      ammo = 30; maxAmmo = 30; fireRate = 150;
+      playerDamage = 1; multiShot = 1;
+      gameOver = false; reloading = false; upgradeMenuOpen = false;
+      bossActive = false; bossWave = false; currentBoss = null;
 
-      player.x = canvas.width / 2;
-      player.y = canvas.height / 2;
-      player.speed = 5;
+      player.x = canvas.width / 2; player.y = canvas.height / 2; player.speed = 5;
+      bullets.length = 0; enemies.length = 0; coinsArr.length = 0; turrets.length = 0;
 
-      bullets.length = 0;
-      enemies.length = 0;
-      coinsArr.length = 0;
-      turrets.length = 0;
-
-      scoreEl.textContent = score;
-      coinsEl.textContent = coins;
-      waveEl.textContent = wave;
-      killsEl.textContent = kills;
+      scoreEl.textContent = score; coinsEl.textContent = coins;
+      waveEl.textContent = wave;   killsEl.textContent = kills;
       ammoEl.textContent = ammo;
-      document.getElementById('dmgLevel').textContent = playerDamage;
-      document.getElementById('spdLevel').textContent = player.speed.toFixed(1);
-      document.getElementById('ammoLevel').textContent = maxAmmo;
-      document.getElementById('fireLevel').textContent = fireRate + 'ms';
+      document.getElementById('dmgLevel').textContent   = playerDamage;
+      document.getElementById('spdLevel').textContent   = player.speed.toFixed(1);
+      document.getElementById('ammoLevel').textContent  = maxAmmo;
+      document.getElementById('fireLevel').textContent  = fireRate + 'ms';
       document.getElementById('multiLevel').textContent = multiShot;
 
       ammoDisplay.classList.remove('low');
@@ -732,21 +561,18 @@
       bossHealthBar.style.display = 'none';
       bossLabel.style.display = 'none';
 
-      if (waveTimer) clearTimeout(waveTimer);
+      if (waveTimer)  clearTimeout(waveTimer);
       if (spawnTimer) clearInterval(spawnTimer);
-
       startWave();
     }
 
-    // Start wave function
     function startWave() {
       if (spawnTimer) clearInterval(spawnTimer);
-      if (waveTimer) clearTimeout(waveTimer);
+      if (waveTimer)  clearTimeout(waveTimer);
 
       if (wave % 5 === 0) {
         bossWave = true;
         bossWarning.style.display = 'block';
-
         setTimeout(() => {
           bossWarning.style.display = 'none';
           currentBoss = new Boss(wave);
@@ -758,203 +584,172 @@
         bossWave = false;
         spawnInterval = Math.max(300, 900 - (wave * 50));
         const bigChance = Math.min(0.5, 0.15 + (wave * 0.03));
-
-        spawnTimer = setInterval(() => {
-          enemies.push(new Enemy(Math.random() < bigChance));
-        }, spawnInterval);
-
-        waveTimer = setTimeout(nextWave, 45000);
+        spawnTimer = setInterval(() => enemies.push(new Enemy(Math.random() < bigChance)), spawnInterval);
+        waveTimer  = setTimeout(nextWave, 45000);
       }
     }
 
-    // Next wave function
-    function nextWave() {
-      wave++;
-      waveEl.textContent = wave;
-      startWave();
-    }
+    function nextWave() { wave++; waveEl.textContent = wave; startWave(); }
 
     startWave();
 
-    // Movement function
     function move() {
       if (upgradeMenuOpen || gameOver) return;
-
       if (keys.w) player.y -= player.speed;
       if (keys.s) player.y += player.speed;
       if (keys.a) player.x -= player.speed;
       if (keys.d) player.x += player.speed;
     }
 
-    // Main animation loop
+    // ─── Helper: drop coins at position ───────────────────────────────────────
+    function dropCoins(x, y, count) {
+      for (let i = 0; i < count; i++) {
+        coinsArr.push(new Coin(x + (Math.random() - 0.5) * 80, y + (Math.random() - 0.5) * 80));
+      }
+    }
+
     function animate() {
       if (gameOver) {
         ctx.fillStyle = "#fff";
         ctx.font = "48px Segoe UI";
         ctx.textAlign = "center";
         ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
-
         ctx.font = "24px Segoe UI";
-        ctx.fillText(
-          `Final Score: ${score} | Wave: ${wave} | Kills: ${kills}`,
-          canvas.width / 2,
-          canvas.height / 2 + 10
-        );
-
+        ctx.fillText(`Final Score: ${score} | Wave: ${wave} | Kills: ${kills}`, canvas.width / 2, canvas.height / 2 + 10);
         if (coins >= 50) {
           ctx.fillStyle = "#00ff00";
           ctx.font = "28px Segoe UI";
-          ctx.fillText(
-            "Press [R] to Revive (50 coins)",
-            canvas.width / 2,
-            canvas.height / 2 + 60
-          );
+          ctx.fillText("Press [R] to Revive (50 coins)", canvas.width / 2, canvas.height / 2 + 60);
         } else {
           ctx.fillStyle = "#888";
           ctx.font = "20px Segoe UI";
-          ctx.fillText(
-            "Not enough coins to revive (need 50)",
-            canvas.width / 2,
-            canvas.height / 2 + 60
-          );
+          ctx.fillText("Not enough coins to revive (need 50)", canvas.width / 2, canvas.height / 2 + 60);
         }
-
         ctx.fillStyle = "#00ffff";
         ctx.font = "28px Segoe UI";
-        ctx.fillText(
-          "Press [SPACE] to Restart",
-          canvas.width / 2,
-          canvas.height / 2 + 110
-        );
-
+        ctx.fillText("Press [SPACE] to Restart", canvas.width / 2, canvas.height / 2 + 110);
         ctx.textAlign = "left";
         requestAnimationFrame(animate);
         return;
       }
 
-      // Clear canvas with fade effect
       ctx.fillStyle = "rgba(0,0,0,0.25)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       move();
       player.update();
 
-      // Update boss
+      // ── Boss update ──────────────────────────────────────────────────────────
       if (currentBoss && bossActive) {
         currentBoss.update();
       }
 
-      // Update turrets
-      turrets.forEach((t, ti) => {
-        t.update();
-        if (t.durability <= 0 && !upgradeMenuOpen) {
-          turrets.splice(ti, 1);
-        }
-      });
-
-      // Update bullets
-      bullets.forEach((b, bi) => {
-        b.update();
-
-        // Check boss bullet collision with player
-        if (b.fromBoss && Math.hypot(b.x - player.x, b.y - player.y) < b.r + player.r) {
-          bullets.splice(bi, 1);
-          if (!gameOver) {
-            gameOver = true;
-            saveHighScore();
-            bossHealthBar.style.display = 'none';
-            bossLabel.style.display = 'none';
-          }
-        }
-
-        // Remove bullets that go off screen
-        if (!upgradeMenuOpen && (b.x < 0 || b.y < 0 || b.x > canvas.width || b.y > canvas.height)) {
-          bullets.splice(bi, 1);
-        }
-      });
-
-      // Boss collision detection
-      if (currentBoss && bossActive && !upgradeMenuOpen) {
-        bullets.forEach((b, bi) => {
-          if (!b.fromBoss && Math.hypot(currentBoss.x - b.x, currentBoss.y - b.y) < currentBoss.r + b.r) {
-            bullets.splice(bi, 1);
-            currentBoss.hp -= b.dmg;
-
-            if (currentBoss.hp <= 0) {
-              bossActive = false;
-              currentBoss = null;
-              bossHealthBar.style.display = 'none';
-              bossLabel.style.display = 'none';
-              score += 200;
-              kills++;
-              scoreEl.textContent = score;
-              killsEl.textContent = kills;
-
-              // Drop coins
-              for (let i = 0; i < 10; i++) {
-                coinsArr.push(new Coin(
-                  canvas.width / 2 + (Math.random() - 0.5) * 100,
-                  canvas.height * 0.25 + (Math.random() - 0.5) * 100
-                ));
-              }
-
-              setTimeout(() => {
-                wave++;
-                waveEl.textContent = wave;
-                startWave();
-              }, 2000);
-            }
-          }
-        });
+      // ── Turrets ──────────────────────────────────────────────────────────────
+      for (let i = turrets.length - 1; i >= 0; i--) {
+        turrets[i].update();
+        if (turrets[i].dead) turrets.splice(i, 1);
       }
 
-      // Update enemies
-      enemies.forEach((e, ei) => {
-        e.update();
-
-        // Check enemy collision with player
-        if (!upgradeMenuOpen && Math.hypot(e.x - player.x, e.y - player.y) < e.r + player.r && !gameOver) {
-          gameOver = true;
-          saveHighScore();
+      // ── Bullets: move + draw ─────────────────────────────────────────────────
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.update();
+        // Remove offscreen bullets
+        if (!upgradeMenuOpen && b.isOffscreen()) {
+          bullets.splice(i, 1);
         }
+      }
 
-        // Check bullet collision with enemies
-        if (!upgradeMenuOpen) {
-          bullets.forEach((b, bi) => {
-            if (!b.fromBoss && Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
+      if (!upgradeMenuOpen) {
+        // ── Boss hit detection ───────────────────────────────────────────────
+        if (currentBoss && bossActive && !currentBoss.dead) {
+          for (let bi = bullets.length - 1; bi >= 0; bi--) {
+            const b = bullets[bi];
+            if (b.fromBoss) continue;
+            if (Math.hypot(currentBoss.x - b.x, currentBoss.y - b.y) < currentBoss.r + b.r) {
               bullets.splice(bi, 1);
-              e.hp -= b.dmg;
+              currentBoss.hp -= b.dmg;
 
-              if (e.hp <= 0) {
-                enemies.splice(ei, 1);
+              if (currentBoss.hp <= 0) {
+                // Boss dies — clear state BEFORE any side effects
+                currentBoss.dead = true;
+                const bx = currentBoss.x, by = currentBoss.y;
+                bossActive  = false;
+                currentBoss = null;
+                bossHealthBar.style.display = 'none';
+                bossLabel.style.display     = 'none';
+
+                score += 200;
                 kills++;
-                score += e.big ? 30 : 10;
-                scoreEl.textContent = score;
-                killsEl.textContent = kills;
+                scoreEl.textContent  = score;
+                killsEl.textContent  = kills;
+                dropCoins(bx, by, 10);
 
-                // Drop coins
-                if (e.big) {
-                  for (let i = 0; i < 3; i++) {
-                    coinsArr.push(new Coin(
-                      e.x + (Math.random() - 0.5) * 30,
-                      e.y + (Math.random() - 0.5) * 30
-                    ));
-                  }
-                } else {
-                  coinsArr.push(new Coin(e.x, e.y));
-                }
+                setTimeout(() => { wave++; waveEl.textContent = wave; startWave(); }, 2000);
+                break; // stop iterating bullets — boss is gone
               }
             }
-          });
+          }
         }
-      });
 
-      // Update coins
-      coinsArr.forEach((c, ci) => {
-        if (c.update()) {
-          coinsArr.splice(ci, 1);
+        // ── Boss bullets hitting player ──────────────────────────────────────
+        if (!gameOver) {
+          for (let bi = bullets.length - 1; bi >= 0; bi--) {
+            const b = bullets[bi];
+            if (!b.fromBoss) continue;
+            if (Math.hypot(b.x - player.x, b.y - player.y) < b.r + player.r) {
+              bullets.splice(bi, 1);
+              gameOver = true;
+              saveHighScore();
+              bossHealthBar.style.display = 'none';
+              bossLabel.style.display     = 'none';
+              break;
+            }
+          }
         }
-      });
+
+        // ── Enemies ──────────────────────────────────────────────────────────
+        for (let ei = enemies.length - 1; ei >= 0; ei--) {
+          const e = enemies[ei];
+          e.update();
+
+          // Enemy touches player
+          if (!gameOver && Math.hypot(e.x - player.x, e.y - player.y) < e.r + player.r) {
+            gameOver = true;
+            saveHighScore();
+            break;
+          }
+
+          // Player/turret bullets hit enemy
+          for (let bi = bullets.length - 1; bi >= 0; bi--) {
+            const b = bullets[bi];
+            if (b.fromBoss) continue;
+            if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r) {
+              bullets.splice(bi, 1);
+              e.hp -= b.dmg;
+              if (e.hp <= 0) {
+                const ex = e.x, ey = e.y, eBig = e.big;
+                enemies.splice(ei, 1);
+                kills++;
+                score += eBig ? 30 : 10;
+                scoreEl.textContent = score;
+                killsEl.textContent = kills;
+                dropCoins(ex, ey, eBig ? 3 : 1);
+                break; // enemy is gone, stop checking bullets for it
+              }
+            }
+          }
+        }
+      } else {
+        // Menu open — still draw enemies
+        for (const e of enemies) e.update();
+      }
+
+      // ── Coins ────────────────────────────────────────────────────────────────
+      for (let ci = coinsArr.length - 1; ci >= 0; ci--) {
+        coinsArr[ci].update();
+        if (coinsArr[ci].dead) coinsArr.splice(ci, 1);
+      }
 
       requestAnimationFrame(animate);
     }
